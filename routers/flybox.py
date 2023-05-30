@@ -11,7 +11,7 @@ from routers.router import Router
 
 class FlyboxRouter(Router):
     """
-    A class for restarting a router by performing authentication using the SCRAM mechanism.
+    A class for performing actions on Flybox router.
 
     Args:
         username (str): The username for authentication.
@@ -200,7 +200,7 @@ class FlyboxRouter(Router):
             return False
 
 
-    def is_available(self):
+    def is_supported_router(self):
         try:
             config_url = f"http://{self.gateway}/config/global/config.xml"
             response = requests.get(config_url) 
