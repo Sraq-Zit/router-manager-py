@@ -1,12 +1,13 @@
 import hashlib
 import hmac
-import sys
 import traceback
 import xml.etree.ElementTree as ET
 
 import requests
 
+from models.information.flybox import FlyboxInformation
 from routers.router import Router
+from utils.xml import merge_xml
 
 
 class FlyboxRouter(Router):
@@ -119,19 +120,24 @@ class FlyboxRouter(Router):
 
         return words
 
-    def _authenticate_router(self):
-        """
-        Authenticate and restart the router.
+    def is_supported_router(self):
+        try:
+            logout_url = f"http://{self.gateway}/config/global/config.xml"
+            response = requests.get(logout_url) 
+            return "<title>Flybox</title>" in response.text
+        except:
+            return False
 
-        Returns:
-            int: The exit code (0 for success, 1 for failure).
-        """
+    def login(self, attempts=3):
         sess = self.sess
 
-        config_url = f"http://{self.gateway}/config/global/config.xml"
-        response = sess.get(config_url)
+        login_state_url = f"http://{self.gateway}/api/user/state-login"
+        response = self.sess.get(login_state_url)
 
-        if "<title>Flybox</title>" not in response.text:
+        if '<State>0</State>' in response.text:
+            return True
+
+        if not self.is_supported_router():
             print("The router is not a Flybox.")
             return False
 
@@ -178,35 +184,62 @@ class FlyboxRouter(Router):
             authentication_url = f"http://{self.gateway}/api/user/authentication_login"
             response = sess.post(authentication_url, data=xml_data)
 
-            # print(sess.get(f"http://{self.gateway}/html/content.html").text)
-
-            sess.headers[self.tokenDictKey] = self._retrieve_token()
-
-            # Restarting ..
-            xml_data = f'<?xml version: "1.0" encoding="UTF-8"?><request><Control>1</Control></request>'
-            control_url = f"http://{self.gateway}/api/device/control"
-            response = sess.post(control_url, data=xml_data)
-
-            if '<response>OK</response>' in response.text:
-                print('Restarting router 🔃')
+            if '<serversignature>' in response.text:
+                return True
             else:
-                print('Something went wrong', response.text)
-                return False
-
-            return True
+                print('Could not login', response.text)
         except Exception as ex:
+            if attempts > 0:
+                return self.login(attempts - 1)
             traceback.print_stack()
             print('Failed to log in. This is usually caused by multiple logins. Please try again later.')
             return False
 
+    def logout(self):
+        if self.login():
+            self.sess.headers[self.tokenDictKey] = self._retrieve_token()
+            xml_data = f'<?xml version: "1.0" encoding="UTF-8"?><request><Logout>1</Logout></request>'
+            control_url = f"http://{self.gateway}/api/user/logout"
+            response = self.sess.post(control_url, data=xml_data)
+            success = '<response>OK</response>' not in response.text
+            if success: print('Failed to logout', response.text)
+            return success
 
-    def is_supported_router(self):
-        try:
-            config_url = f"http://{self.gateway}/config/global/config.xml"
-            response = requests.get(config_url) 
-            return "<title>Flybox</title>" in response.text
-        except:
+
+    def get_router_information(self):
+        info_url = f"http://{self.gateway}/api/device/information"
+        signal_url = f"http://{self.gateway}/api/device/signal"
+
+        xml = merge_xml(
+            self.sess.get(info_url).text,
+            self.sess.get(signal_url).text,
+        )
+
+        return FlyboxInformation.from_xml_string(xml)
+
+    def restart_router(self):
+        if not self.gateway:
+            print("Gateway not found. Please check your network configuration.")
             return False
+
+        if self.login():
+            self.sess.headers[self.tokenDictKey] = self._retrieve_token()
+
+            # Restarting ..
+            xml_data = f'<?xml version: "1.0" encoding="UTF-8"?><request><Control>1</Control></request>'
+            control_url = f"http://{self.gateway}/api/device/control"
+            response = self.sess.post(control_url, data=xml_data)
+
+            success = '<response>OK</response>' in response.text
+
+            if success:
+                print('Restarting router 🔃')
+            else:
+                print('Something went wrong', response.text)
+
+            return success
+
+        return False
 
 
     def restart_router(self):
