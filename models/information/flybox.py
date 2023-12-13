@@ -1,5 +1,9 @@
+import json
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
+
+from utils import settings
+
 
 from .base import InformationBase
 
@@ -36,26 +40,27 @@ class FlyboxInformation(InformationBase):
         """
         Returns a string representation of the FlyboxInformation instance.
         """
-        return f"Device Name:                   {self.device_name}\n" \
-               f"Serial Number:                 {self.serial_number}\n" \
-               f"IMEI:                          {self.imei}\n" \
-               f"IMSI:                          {self.imsi}\n" \
-               f"Hardware Version:              {self.hardware_version}\n" \
-               f"Software Version:              {self.software_version}\n" \
-               f"Web UI Version:                {self.web_ui_version}\n" \
-               f"Configuration File Version:    {self.config_file_version}\n" \
-               f"LAN MAC Address:               {self.lan_mac_address}\n" \
-               f"WAN IP Address:                {self.wan_ip_address}\n" \
-               f"WAN IPv6 Address:              {self.wan_ipv6_address}\n" \
-               f"Cell ID:                       {self.cell_id}\n" \
-               f"CQI:                           {self.cqi}\n" \
-               f"RSRQ:                          {self.rsrq}\n" \
-               f"RSRP:                          {self.rsrp}\n" \
-               f"RSSI:                          {self.rssi}\n" \
-               f"SINR:                          {self.sinr}\n" \
-               f"Wireless Transmit Power:       {self.wireless_transmit_power}\n" \
-               f"PLMN:                          {self.plmn}\n" \
-               f"Band:                          {self.band}"
+        return json.dumps(self.__dict__) if settings.AS_JSON else \
+                f"Device Name:                   {self.device_name}\n" \
+                f"Serial Number:                 {self.serial_number}\n" \
+                f"IMEI:                          {self.imei}\n" \
+                f"IMSI:                          {self.imsi}\n" \
+                f"Hardware Version:              {self.hardware_version}\n" \
+                f"Software Version:              {self.software_version}\n" \
+                f"Web UI Version:                {self.web_ui_version}\n" \
+                f"Configuration File Version:    {self.config_file_version}\n" \
+                f"LAN MAC Address:               {self.lan_mac_address}\n" \
+                f"WAN IP Address:                {self.wan_ip_address}\n" \
+                f"WAN IPv6 Address:              {self.wan_ipv6_address}\n" \
+                f"Cell ID:                       {self.cell_id}\n" \
+                f"CQI:                           {self.cqi}\n" \
+                f"RSRQ:                          {self.rsrq}\n" \
+                f"RSRP:                          {self.rsrp}\n" \
+                f"RSSI:                          {self.rssi}\n" \
+                f"SINR:                          {self.sinr}\n" \
+                f"Wireless Transmit Power:       {self.wireless_transmit_power}\n" \
+                f"PLMN:                          {self.plmn}\n" \
+                f"Band:                          {self.band}"
 
     @staticmethod
     def from_xml_string(xml):

@@ -111,3 +111,18 @@ class Router:
         """
         raise NotImplementedError("get_router_information method must be implemented in derived classes")
     
+    def get_connected_devices(self):
+        """
+        Get the connected devices.
+
+        This method should be implemented in derived classes to provide
+        router-specific functionality to retrieve the connected devices.
+
+        Returns:
+            collection: A collection of connected devices.
+
+        Raises:
+            NotImplementedError: If the method is not implemented in the derived class.
+
+        """
+        raise NotImplementedError("get_connected_devices method must be implemented in derived classes")

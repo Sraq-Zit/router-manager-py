@@ -6,6 +6,7 @@ import xml.etree.ElementTree as ET
 import requests
 
 from models.information.flybox import FlyboxInformation
+from models.user_device.base import UserDeviceBase, UserDeviceBaseCollection
 from routers.router import Router
 from utils.xml import merge_xml
 
@@ -191,7 +192,7 @@ class FlyboxRouter(Router):
         except Exception as ex:
             if attempts > 0:
                 return self.login(attempts - 1)
-            traceback.print_stack()
+            traceback.print_exc()
             print('Failed to log in. This is usually caused by multiple logins. Please try again later.')
             return False
 
@@ -241,17 +242,27 @@ class FlyboxRouter(Router):
 
         return False
 
-
-    def restart_router(self):
-        """
-        Restart the router by performing authentication.
-
-        Returns:
-            int: The exit code (0 for success, 1 for failure).
-        """
-
+    def get_connected_devices(self, include_disconnected=False):
         if not self.gateway:
             print("Gateway not found. Please check your network configuration.")
             return False
 
-        return self._authenticate_router()
+        if self.login():
+            control_url = f"http://{self.gateway}/api/lan/HostInfo"
+            response = self.sess.get(control_url)
+
+            root = ET.fromstring(response.text)
+            
+            devices = [
+                UserDeviceBase(
+                    node.find('ActualName').text,
+                    node.find('IpAddress').text,
+                    node.find('MacAddress').text,
+                    node.find('InterfaceType').text,
+                    24 * 3600 - int(node.find('LeaseTime').text),
+                    node.find('Active').text == '1'
+                ) for node in root.findall('Hosts/Host')
+            ]
+
+
+            return UserDeviceBaseCollection(devices)

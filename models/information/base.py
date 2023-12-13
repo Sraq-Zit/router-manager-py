@@ -1,5 +1,7 @@
 from dataclasses import dataclass
+import json
 
+from utils import settings
 
 @dataclass
 class InformationBase:
@@ -36,14 +38,15 @@ class InformationBase:
         """
         Returns a string representation of the Information instance.
         """
-        return f"Device Name:               {self.device_name}\n" \
-               f"Serial Number:             {self.serial_number}\n" \
-               f"IMEI:                      {self.imei}\n" \
-               f"IMSI:                      {self.imsi}\n" \
-               f"Hardware Version:          {self.hardware_version}\n" \
-               f"Software Version:          {self.software_version}\n" \
-               f"LAN MAC Address:           {self.lan_mac_address}\n" \
-               f"WAN IP Address:            {self.wan_ip_address}\n" \
-               f"WAN IPv6 Address:          {self.wan_ipv6_address}\n" \
-               f"Wireless Transmit Power:   {self.wireless_transmit_power}\n" \
-               f"Band:                      {self.band}"
+        return json.dumps(self.__dict__) if settings.AS_JSON else \
+                f"Device Name:               {self.device_name}\n" \
+                f"Serial Number:             {self.serial_number}\n" \
+                f"IMEI:                      {self.imei}\n" \
+                f"IMSI:                      {self.imsi}\n" \
+                f"Hardware Version:          {self.hardware_version}\n" \
+                f"Software Version:          {self.software_version}\n" \
+                f"LAN MAC Address:           {self.lan_mac_address}\n" \
+                f"WAN IP Address:            {self.wan_ip_address}\n" \
+                f"WAN IPv6 Address:          {self.wan_ipv6_address}\n" \
+                f"Wireless Transmit Power:   {self.wireless_transmit_power}\n" \
+                f"Band:                      {self.band}"
