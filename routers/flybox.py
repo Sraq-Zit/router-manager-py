@@ -1,13 +1,19 @@
 import hashlib
 import hmac
+import json
 import traceback
 import xml.etree.ElementTree as ET
 
 import requests
 
 from models.information.flybox import FlyboxInformation
+from models.mac_filtering.base import MacFilteringSsidCollection
+from models.mac_filtering.flybox import MacFilteringFlybox
 from models.user_device.base import UserDeviceBase, UserDeviceBaseCollection
 from routers.router import Router
+from utils import settings
+from utils.consts import GATEWAY_ERROR, INCOMPATIBLE, LOGIN_FAILED, MANY_LOGIN_ATTEMPTS, RESTARTING, SOMETHING_WRONG, TOKEN_FAILED
+from utils.functions import handle_error, handle_info
 from utils.xml import merge_xml
 
 
@@ -24,7 +30,6 @@ class FlyboxRouter(Router):
         super().__init__(username, password)
         self.sess = requests.session()
         self.tokenDictKey = '__requestverificationtoken'
-
 
     def _retrieve_token(self):
         """
@@ -49,7 +54,13 @@ class FlyboxRouter(Router):
         Returns:
             str: The salted password.
         """
-        salted_password = hashlib.pbkdf2_hmac('sha256', self.password.encode(), bytes.fromhex(salt), iterations, dklen=32)
+        salted_password = hashlib.pbkdf2_hmac(
+            'sha256',
+            self.password.encode(),
+            bytes.fromhex(salt),
+            iterations,
+            dklen=32
+        )
         return salted_password.hex()
 
     def _scram_client_key(self, salt_password):
@@ -63,7 +74,8 @@ class FlyboxRouter(Router):
             str: The client key.
         """
         salt_password = bytes.fromhex(salt_password)
-        client_key = hmac.new("Client Key".encode(), salt_password, hashlib.sha256).hexdigest()
+        client_key = hmac.new("Client Key".encode(),
+                              salt_password, hashlib.sha256).hexdigest()
         return client_key
 
     def _xor_hex_strings(self, ckey_hex, csig_hex):
@@ -116,7 +128,8 @@ class FlyboxRouter(Router):
 
         for i in range(0, len(byte_array), word_size):
             word_bytes = byte_array[i:i+word_size]
-            word_value = int.from_bytes(word_bytes, byteorder='big', signed=True)
+            word_value = int.from_bytes(
+                word_bytes, byteorder='big', signed=True)
             words.append(word_value)
 
         return words
@@ -124,7 +137,7 @@ class FlyboxRouter(Router):
     def is_supported_router(self):
         try:
             logout_url = f"http://{self.gateway}/config/global/config.xml"
-            response = requests.get(logout_url) 
+            response = requests.get(logout_url)
             return "<title>Flybox</title>" in response.text
         except:
             return False
@@ -136,18 +149,17 @@ class FlyboxRouter(Router):
         response = self.sess.get(login_state_url)
 
         if '<State>0</State>' in response.text:
-            return True
+            return True, response.text
 
         if not self.is_supported_router():
-            print("The router is not a Flybox.")
-            return False
-
+            if not settings.AS_JSON:
+                print("The router is not a Flybox.")
+            return INCOMPATIBLE, ''
 
         token = self._retrieve_token()
 
         if not token:
-            print("Failed to retrieve the token.")
-            return False
+            return TOKEN_FAILED, ''
 
         sess.headers[self.tokenDictKey] = token
         sess.headers["_responseSource"] = "Browser"
@@ -158,43 +170,57 @@ class FlyboxRouter(Router):
 
         challenge_url = f"http://{self.gateway}/api/user/challenge_login"
         response = sess.post(challenge_url, data=xml_data)
+
+        if '<code>108007</code>' in response.text:
+            return MANY_LOGIN_ATTEMPTS, response.text
+        
+
         sess.headers[self.tokenDictKey] = response.headers[self.tokenDictKey]
 
         try:
             response_tree = ET.fromstring(response.text)
 
-            iterations = int(response_tree.find('iterations').text) if response_tree.find('iterations') is not None else ''
-            final_nonce = response_tree.find('servernonce').text if response_tree.find('servernonce') is not None else ''
-            salt = response_tree.find('salt').text if response_tree.find('salt') is not None else ''
-
+            iterations = int(response_tree.find('iterations').text) if response_tree.find(
+                'iterations') is not None else ''
+            final_nonce = response_tree.find('servernonce').text if response_tree.find(
+                'servernonce') is not None else ''
+            salt = response_tree.find('salt').text if response_tree.find(
+                'salt') is not None else ''
 
             auth_msg = f"{first_nonce},{final_nonce},{final_nonce}"
 
-            client_key = self._scram_client_key(self._scram_salted_password(salt, iterations))
+            client_key = self._scram_client_key(
+                self._scram_salted_password(salt, iterations))
 
             storedKey = hashlib.new('sha256')
             storedKey.update(bytes.fromhex(client_key))
             storedKey = storedKey.hexdigest()
 
-            signature = hmac.new(auth_msg.encode(), bytes.fromhex(storedKey), hashlib.sha256).hexdigest()
+            signature = hmac.new(auth_msg.encode(), bytes.fromhex(
+                storedKey), hashlib.sha256).hexdigest()
 
-            client_proof = self._xor_hex_strings(bytes.fromhex(client_key), bytes.fromhex(signature))
-
+            client_proof = self._xor_hex_strings(
+                bytes.fromhex(client_key), bytes.fromhex(signature))
 
             xml_data = f'<?xml version: "1.0" encoding="UTF-8"?><request><clientproof>{client_proof}</clientproof><finalnonce>{final_nonce}</finalnonce></request>'
             authentication_url = f"http://{self.gateway}/api/user/authentication_login"
             response = sess.post(authentication_url, data=xml_data)
 
             if '<serversignature>' in response.text:
-                return True
+                return True, response.text
+            elif '<code>108006</code>' in response.text:
+                return LOGIN_FAILED, response.text
             else:
-                print('Could not login', response.text)
+                return SOMETHING_WRONG, response.text
         except Exception as ex:
             if attempts > 0:
                 return self.login(attempts - 1)
-            traceback.print_exc()
-            print('Failed to log in. This is usually caused by multiple logins. Please try again later.')
-            return False
+            if not settings.AS_JSON:
+                traceback.print_exc()
+                print(
+                    'Failed to log in. This is usually caused by multiple logins. Please try again later.'
+                )
+            return SOMETHING_WRONG, ''
 
     def logout(self):
         if self.login():
@@ -203,9 +229,9 @@ class FlyboxRouter(Router):
             control_url = f"http://{self.gateway}/api/user/logout"
             response = self.sess.post(control_url, data=xml_data)
             success = '<response>OK</response>' not in response.text
-            if success: print('Failed to logout', response.text)
+            if success:
+                print('Failed to logout', response.text)
             return success
-
 
     def get_router_information(self):
         info_url = f"http://{self.gateway}/api/device/information"
@@ -220,7 +246,7 @@ class FlyboxRouter(Router):
 
     def restart_router(self):
         if not self.gateway:
-            print("Gateway not found. Please check your network configuration.")
+            handle_error(GATEWAY_ERROR)
             return False
 
         if self.login():
@@ -234,9 +260,9 @@ class FlyboxRouter(Router):
             success = '<response>OK</response>' in response.text
 
             if success:
-                print('Restarting router 🔃')
+                handle_info(RESTARTING)
             else:
-                print('Something went wrong', response.text)
+                handle_error(SOMETHING_WRONG, response.text)
 
             return success
 
@@ -244,7 +270,7 @@ class FlyboxRouter(Router):
 
     def get_connected_devices(self, include_disconnected=False):
         if not self.gateway:
-            print("Gateway not found. Please check your network configuration.")
+            handle_error(GATEWAY_ERROR)
             return False
 
         if self.login():
@@ -252,7 +278,7 @@ class FlyboxRouter(Router):
             response = self.sess.get(control_url)
 
             root = ET.fromstring(response.text)
-            
+
             devices = [
                 UserDeviceBase(
                     node.find('ActualName').text,
@@ -260,9 +286,29 @@ class FlyboxRouter(Router):
                     node.find('MacAddress').text,
                     node.find('InterfaceType').text,
                     24 * 3600 - int(node.find('LeaseTime').text),
-                    node.find('Active').text == '1'
+                    node.find('Active').text == '1',
+                    node.find('isLocalDevice').text == '1',
                 ) for node in root.findall('Hosts/Host')
             ]
 
-
             return UserDeviceBaseCollection(devices)
+
+    def get_mac_filters(self):
+        if not self.gateway:
+            handle_error(GATEWAY_ERROR)
+            return False
+
+        if self.login():
+            control_url = f"http://{self.gateway}/api/wlan/multi-macfilter-settings-ex"
+            response = self.sess.get(control_url)
+
+            root = ET.fromstring(response.text)
+
+
+            mac_filters = []
+
+            for ssid in root.findall('.//Ssid'):
+                table =  MacFilteringFlybox.from_xml(ssid)
+                mac_filters.append(table)
+
+            return MacFilteringSsidCollection(mac_filters)

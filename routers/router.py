@@ -126,3 +126,19 @@ class Router:
 
         """
         raise NotImplementedError("get_connected_devices method must be implemented in derived classes")
+    
+    def get_mac_filters(self):
+        """
+        Get the MAC filters.
+
+        This method should be implemented in derived classes to provide
+        router-specific functionality to retrieve the MAC filters.
+
+        Returns:
+            collection: A collection of MAC filters.
+
+        Raises:
+            NotImplementedError: If the method is not implemented in the derived class.
+
+        """
+        raise NotImplementedError("get_mac_filters method must be implemented in derived classes")

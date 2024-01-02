@@ -27,6 +27,7 @@ class UserDeviceBase:
     interface: str
     uptime: int
     active: bool
+    is_local: bool
 
 
 
@@ -81,4 +82,10 @@ class UserDeviceBaseCollection:
     def display(self, include_inactive=False):
         """ Display the user devices. """
         devices = [d for d in self.devices if include_inactive or d.active]
-        return json.dumps([d.__dict__ for d in devices]) if settings.AS_JSON else self.display_as_dataframe(devices)
+        if settings.AS_JSON:
+            return json.dumps([d.__dict__ for d in devices])
+        
+        if include_inactive:
+            return self.display_inactive_as_dataframe().__repr__() \
+                + '\n\nActive devices:\n' \
+                + self.display_active_as_dataframe().__repr__()
