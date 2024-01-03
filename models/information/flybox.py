@@ -14,6 +14,17 @@ class FlyboxInformation(InformationBase):
     Represents the information of a Flybox router.
 
     Attributes:
+        device_name (str): The device name of the router.
+        serial_number (str): The serial number of the router.
+        imei (str): The IMEI (International Mobile Equipment Identity) of the router.
+        imsi (str): The IMSI (International Mobile Subscriber Identity) of the router.
+        hardware_version (str): The hardware version of the router.
+        software_version (str): The software version of the router.
+        lan_mac_address (str): The LAN (Local Area Network) MAC (Media Access Control) address of the router.
+        wan_ip_address (str): The WAN (Wide Area Network) IP (Internet Protocol) address of the router.
+        wan_ipv6_address (str): The WAN IPv6 (Internet Protocol version 6) address of the router.
+        wireless_transmit_power (str): The wireless transmit power of the router.
+        band (str): The band of the router.
         web_ui_version (str): The web UI (User Interface) version of the router.
         config_file_version (str): The configuration file version of the router.
         cell_id (str): The cell ID of the router.
@@ -24,7 +35,17 @@ class FlyboxInformation(InformationBase):
         sinr (str): The SINR (Signal-to-Interference-plus-Noise Ratio) of the router.
         plmn (str): The PLMN (Public Land Mobile Network) of the router.
     """
-
+    device_name: str
+    serial_number: str
+    imei: str
+    imsi: str
+    hardware_version: str
+    software_version: str
+    lan_mac_address: str
+    wan_ip_address: str
+    wan_ipv6_address: str
+    wireless_transmit_power: str
+    band: str
     web_ui_version: str
     config_file_version: str
     cell_id: str
